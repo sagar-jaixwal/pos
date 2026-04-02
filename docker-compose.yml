@@ -1,0 +1,20 @@
+services:
+  pos_backend:
+    build: .
+    image: sagarhydra/pos:latest
+    container_name: pos_backend
+    ports:
+      - "9844:9844"
+    env_file:
+      - .env
+    networks:
+      - pos_backend_network
+    volumes:
+      - .:/usr/src/app
+      - /usr/src/app/node_modules
+    environment:
+      - NODE_ENV=development
+
+networks:
+  pos_backend_network:
+    driver: bridge

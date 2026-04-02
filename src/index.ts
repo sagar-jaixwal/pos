@@ -41,16 +41,32 @@ app.get('/', (req, res) => {
       customerRedeem: 'POST /api/customer/:phoneNumber/redeem',
       customerHistory: 'GET /api/customer/:phoneNumber/history',
       merchantRule: 'GET /api/merchant/:merchantId/rule',
-      updateMerchantRule: 'PUT /api/merchant/:merchantId/rule'
+      updateMerchantRule: 'PUT /api/merchant/:merchantId/rule',
+      squareWebhook: 'POST /api/webhooks/square',
+      cloverWebhook: 'POST /api/webhooks/clover',
+      oauthConnect: 'POST /api/oauth/:provider/connect',
+      oauthCallback: 'GET /api/oauth/:provider/callback',
+      oauthStatus: 'GET /api/oauth/:provider/status'
     },
     documentation: {
-      overview: 'This system automatically calculates reward points after each purchase',
+      overview: 'This system automatically calculates reward points after each purchase and supports secure OAuth connections to POS systems',
       features: [
+        'OAuth 2.0 integration with Square and Clover POS systems',
+        'Encrypted token storage with AES-GCM encryption',
+        'HMAC webhook signature verification',
+        'Fast-ack webhook processing for reliability',
         'Automatic point calculation based on purchase amount',
         'Bonus points for specific categories',
         'Voucher generation when points reach thresholds',
         'Voucher redemption for discounts on future purchases',
         'Customer wallet management via phone number lookup'
+      ],
+      oauthFlow: [
+        '1. POST /api/oauth/square/connect - Initiate Square OAuth',
+        '2. Redirect merchant to authorization URL',
+        '3. Square redirects to /api/oauth/square/callback',
+        '4. System exchanges code for tokens and stores encrypted',
+        '5. Webhooks verified using stored webhook secrets'
       ],
       flow: [
         '1. Customer makes purchase at POS (Square/Clover)',

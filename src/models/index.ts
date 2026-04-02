@@ -90,6 +90,46 @@ export interface Redemption {
   redeemedAt: Date;
 }
 
+// OAuth & Webhook Models
+export interface OAuthState {
+  id: string;
+  state: string;
+  merchantId: string;
+  provider: 'square' | 'clover';
+  expiresAt: Date;
+  createdAt: Date;
+}
+
+export interface POSConnection {
+  id: string;
+  merchantId: string;
+  provider: 'square' | 'clover';
+  merchantAccountId: string;
+  accessToken: string; // Encrypted
+  refreshToken: string; // Encrypted
+  tokenExpiresAt: Date;
+  webhookSecret?: string; // Encrypted
+  status: 'pending' | 'connected' | 'failed' | 'degraded' | 'disconnected';
+  lastConnectedAt?: Date;
+  lastError?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface WebhookEvent {
+  id: string;
+  provider: 'square' | 'clover';
+  merchantId: string;
+  providerEventId: string;
+  eventType: string;
+  rawPayload: string;
+  signature: string;
+  processed: boolean;
+  processedAt?: Date;
+  error?: string;
+  createdAt: Date;
+}
+
 // In-memory database for demonstration
 export class InMemoryDatabase {
   customers: Map<string, Customer> = new Map();
@@ -99,6 +139,11 @@ export class InMemoryDatabase {
   rewardRules: Map<string, RewardRule> = new Map();
   redemptions: Map<string, Redemption> = new Map();
 
+  // OAuth & Webhook
+  oauthStates: Map<string, OAuthState> = new Map();
+  posConnections: Map<string, POSConnection> = new Map();
+  webhookEvents: Map<string, WebhookEvent> = new Map();
+
   // Index by phone number for quick lookup
   customerByPhone: Map<string, Customer> = new Map();
   
@@ -106,6 +151,10 @@ export class InMemoryDatabase {
   pointsByCustomer: Map<string, RewardPoint[]> = new Map();
   vouchersByCustomer: Map<string, Voucher[]> = new Map();
   transactionsByCustomer: Map<string, Transaction[]> = new Map();
+
+  // OAuth indexes
+  oauthStateByState: Map<string, OAuthState> = new Map();
+  posConnectionByMerchant: Map<string, POSConnection[]> = new Map();
 }
 
 export const db = new InMemoryDatabase();

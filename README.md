@@ -144,6 +144,44 @@ Content-Type: application/json
 }
 ```
 
+## Webhook Integrations
+
+### Square Webhooks
+Configure Square to send webhooks to your server for real-time transaction processing.
+
+**Webhook URL:** `POST https://your-domain.com/api/webhooks/square`
+
+**Supported Events:**
+- `payment.created` - When a payment is completed
+- `payment.updated` - When a payment is updated
+- `order.created` - When an order is created
+- `order.updated` - When an order is updated
+
+**Setup in Square Dashboard:**
+1. Go to your Square Developer Dashboard
+2. Navigate to Webhooks
+3. Add webhook subscription for your application
+4. Set URL to `https://your-domain.com/api/webhooks/square`
+5. Select events: `payments` and `orders`
+
+### Clover Webhooks
+Configure Clover to send webhooks for transaction events.
+
+**Webhook URL:** `POST https://your-domain.com/api/webhooks/clover`
+
+**Supported Events:**
+- `CREATE_ORDER` - When an order is created
+- `UPDATE_ORDER` - When an order is updated
+- `CREATE_PAYMENT` - When a payment is created
+- `UPDATE_PAYMENT` - When a payment is updated
+
+**Setup in Clover Dashboard:**
+1. Go to your Clover Developer Dashboard
+2. Navigate to Webhooks
+3. Add webhook subscription for your application
+4. Set URL to `https://your-domain.com/api/webhooks/clover`
+5. Select events: `orders` and `payments`
+
 ## Example Flow
 
 ### 1. First Purchase - Earn Points
@@ -278,14 +316,139 @@ curl -X POST http://localhost:3000/api/transaction \
 ## Integration with POS Systems
 
 ### Square Integration
-1. Set up Square webhook endpoint
-2. Configure webhook URL to point to `/api/transaction`
-3. Map Square transaction data to our request format
+The system supports two integration methods with Square:
+
+**Method 1: Direct API Calls**
+- Send transaction data directly to `/api/transaction` endpoint
+- Best for custom integrations or when webhook setup is not possible
+
+**Method 2: Webhooks (Recommended)**
+- Configure Square webhooks to automatically send transaction data
+- Real-time processing of payments and orders
+- No manual API calls needed from POS system
 
 ### Clover Integration
-1. Use Clover API to fetch transaction data
-2. Send transaction to `/api/transaction` endpoint
-3. Display returned voucher code to cashier
+The system supports two integration methods with Clover:
+
+**Method 1: Direct API Calls**
+- Send transaction data directly to `/api/transaction` endpoint
+- Best for custom integrations
+
+**Method 2: Webhooks (Recommended)**
+- Configure Clover webhooks for automatic transaction processing
+- Real-time updates when orders and payments are created/updated
+- Seamless integration with existing Clover workflows
+
+## OAuth Integration
+
+The system now supports secure OAuth 2.0 connections to Square and Clover POS systems, following the [SalesArc OAuth Flow Architecture](https://dhruvdoshi.github.io/salesarc/integrations/oauth-flow).
+
+### Features
+
+- ✅ **Secure Token Storage**: Access tokens encrypted with AES-GCM
+- ✅ **HMAC Webhook Verification**: Validates webhook signatures using stored secrets
+- ✅ **Fast-Ack Processing**: Immediate webhook acknowledgment for reliability
+- ✅ **State Management**: Encrypted OAuth state to prevent CSRF attacks
+- ✅ **Token Refresh**: Automatic token renewal before expiration
+
+### OAuth Flow
+
+#### 1. Initiate Connection
+```
+POST /api/oauth/square/connect
+Content-Type: application/json
+
+{
+  "merchantId": "merchant_123"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "authorizationUrl": "https://connect.squareup.com/oauth2/authorize?...",
+    "state": "encrypted_state_string"
+  }
+}
+```
+
+#### 2. Merchant Authorization
+- Redirect merchant to the `authorizationUrl`
+- Merchant logs in and grants permissions
+- POS system redirects to your callback URL
+
+#### 3. Handle Callback
+The callback is automatically handled at:
+```
+GET /api/oauth/square/callback?code=auth_code&state=encrypted_state
+```
+
+#### 4. Check Connection Status
+```
+GET /api/oauth/square/status?merchantId=merchant_123
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "connected": true,
+    "connectionId": "conn_xxx",
+    "provider": "square",
+    "merchantAccountId": "sq0idb-...",
+    "status": "connected",
+    "lastConnectedAt": "2024-01-01T12:00:00Z",
+    "tokenExpiresAt": "2024-01-01T13:00:00Z"
+  }
+}
+```
+
+### Environment Variables
+
+Add these to your `.env` file:
+
+```env
+# Encryption (generate a secure 32-character key)
+ENCRYPTION_KEY=your-32-character-encryption-key-here
+
+# Square OAuth
+SQUARE_APPLICATION_ID=your_square_app_id
+SQUARE_ACCESS_TOKEN=your_square_access_token
+
+# Clover OAuth
+CLOVER_APPLICATION_ID=your_clover_app_id
+CLOVER_APP_SECRET=your_clover_app_secret
+
+# Server
+BASE_URL=https://your-domain.com
+NODE_ENV=production
+```
+
+### Webhook Security
+
+Webhooks are now verified using the OAuth-stored webhook secrets:
+
+- **Square**: HMAC-SHA256 with base64 encoding
+- **Clover**: HMAC-SHA256 with hex encoding
+- **Fast-Ack**: Immediate 200 response, async processing
+- **Idempotency**: Prevents duplicate processing
+
+### Example OAuth Setup
+
+```bash
+# 1. Initiate Square connection
+curl -X POST http://localhost:9844/api/oauth/square/connect \
+  -H "Content-Type: application/json" \
+  -d '{"merchantId": "merchant_123"}'
+
+# 2. Redirect merchant to authorizationUrl (manually or in app)
+
+# 3. Check connection status
+curl "http://localhost:9844/api/oauth/square/status?merchantId=merchant_123"
+```
 
 ## Database Migration (Production)
 

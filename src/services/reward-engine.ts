@@ -4,7 +4,7 @@
  * Based on SalesArc Reward Engine Architecture
  */
 
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import { db, Transaction, RewardPoint, Voucher, RewardRule, VoucherThreshold } from '../models';
 
 export class RewardEngineService {
@@ -46,7 +46,7 @@ export class RewardEngineService {
     const newBalance = currentBalance + pointsEarned;
 
     const rewardPoint: RewardPoint = {
-      id: uuidv4(),
+      id: randomUUID(),
       customerId,
       transactionId: transaction.id,
       pointsEarned,
@@ -119,7 +119,7 @@ export class RewardEngineService {
 
     // Generate voucher
     const voucher: Voucher = {
-      id: uuidv4(),
+      id: randomUUID(),
       customerId,
       code: `REWARD-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
       discountType: threshold.discountType,

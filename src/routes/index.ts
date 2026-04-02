@@ -5,6 +5,9 @@
 import { Router, Request, Response } from 'express';
 import { posAdapter, POSTransactionRequest } from '../services/pos-adapter';
 import { walletService } from '../services/wallet';
+import { squareService, SquareWebhookEvent } from '../services/square';
+import { cloverService, CloverWebhookEvent } from '../services/clover';
+import { oauthService } from '../services/oauth';
 import { db } from '../models';
 
 const router = Router();
@@ -299,6 +302,257 @@ router.put('/merchant/:merchantId/rule', (req: Request, res: Response) => {
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Failed to update reward rule'
+    });
+  }
+});
+
+/**
+ * POST /api/webhooks/square
+ * Handle Square webhook events
+ */
+router.post('/webhooks/square', async (req: Request, res: Response) => {
+  try {
+    const event: SquareWebhookEvent = req.body;
+    const signature = req.headers['x-square-hmacsha256-signature'] as string;
+
+    // Extract merchant ID from webhook payload
+    const merchantId = event.data?.object?.payment?.location_id ||
+                      event.merchant_id ||
+                      req.headers['x-square-merchant-id'] as string;
+
+    if (!merchantId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Merchant ID not found in webhook payload'
+      });
+    }
+
+    // Verify webhook signature using OAuth service
+    if (!oauthService.verifyWebhookSignature('square', signature, JSON.stringify(req.body), merchantId)) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid webhook signature'
+      });
+    }
+
+    // Fast ack - respond immediately
+    res.status(200).json({ success: true, message: 'Webhook received' });
+
+    // Process webhook asynchronously
+    setImmediate(async () => {
+      try {
+        const result = await squareService.handleWebhook(event);
+        console.log('Square webhook processed:', result);
+      } catch (error) {
+        console.error('Error processing Square webhook asynchronously:', error);
+      }
+    });
+  } catch (error) {
+    console.error('Error processing Square webhook:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to process Square webhook'
+    });
+  }
+});
+
+/**
+ * POST /api/webhooks/clover
+ * Handle Clover webhook events
+ */
+router.post('/webhooks/clover', async (req: Request, res: Response) => {
+  try {
+    const event: CloverWebhookEvent = req.body;
+    const signature = req.headers['x-clover-signature'] as string;
+
+    // Extract merchant ID from webhook payload
+    const merchantId = event.merchantId ||
+                      req.headers['x-clover-merchant-id'] as string;
+
+    if (!merchantId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Merchant ID not found in webhook payload'
+      });
+    }
+
+    // Verify webhook signature using OAuth service
+    if (!oauthService.verifyWebhookSignature('clover', signature, JSON.stringify(req.body), merchantId)) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid webhook signature'
+      });
+    }
+
+    // Fast ack - respond immediately
+    res.status(200).json({ success: true, message: 'Webhook received' });
+
+    // Process webhook asynchronously
+    setImmediate(async () => {
+      try {
+        const result = await cloverService.handleWebhook(event);
+        console.log('Clover webhook processed:', result);
+      } catch (error) {
+        console.error('Error processing Clover webhook asynchronously:', error);
+      }
+    });
+  } catch (error) {
+    console.error('Error processing Clover webhook:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to process Clover webhook'
+    });
+  }
+});
+
+/**
+ * POST /api/oauth/:provider/connect
+ * Initiate OAuth connection flow for Square or Clover
+ */
+router.post('/oauth/:provider/connect', async (req: Request, res: Response) => {
+  try {
+    const provider = req.params.provider as 'square' | 'clover';
+    const { merchantId } = req.body;
+
+    if (!['square', 'clover'].includes(provider)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Provider must be either "square" or "clover"'
+      });
+    }
+
+    if (!merchantId) {
+      return res.status(400).json({
+        success: false,
+        error: 'merchantId is required'
+      });
+    }
+
+    const result = await oauthService.initiateConnection({ provider, merchantId });
+
+    res.json({
+      success: true,
+      data: result
+    });
+  } catch (error) {
+    console.error('Error initiating OAuth connection:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to initiate OAuth connection'
+    });
+  }
+});
+
+/**
+ * GET /api/oauth/:provider/callback
+ * Handle OAuth callback from Square or Clover
+ */
+router.get('/oauth/:provider/callback', async (req: Request, res: Response) => {
+  try {
+    const provider = req.params.provider as 'square' | 'clover';
+    const { code, state, error, error_description } = req.query;
+
+    if (!['square', 'clover'].includes(provider)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Provider must be either "square" or "clover"'
+      });
+    }
+
+    // Handle OAuth errors
+    if (error) {
+      console.error('OAuth error:', error, error_description);
+      return res.status(400).json({
+        success: false,
+        error: error_description || error
+      });
+    }
+
+    if (!code || !state) {
+      return res.status(400).json({
+        success: false,
+        error: 'Authorization code and state are required'
+      });
+    }
+
+    const connection = await oauthService.handleCallback({
+      provider,
+      code: code as string,
+      state: state as string
+    });
+
+    // Redirect to success page or return connection info
+    res.json({
+      success: true,
+      data: {
+        connectionId: connection.id,
+        provider: connection.provider,
+        merchantAccountId: connection.merchantAccountId,
+        status: connection.status,
+        message: 'OAuth connection established successfully'
+      }
+    });
+  } catch (error) {
+    console.error('Error handling OAuth callback:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to complete OAuth connection'
+    });
+  }
+});
+
+/**
+ * GET /api/oauth/:provider/status
+ * Check OAuth connection status for a merchant
+ */
+router.get('/oauth/:provider/status', (req: Request, res: Response) => {
+  try {
+    const provider = req.params.provider as 'square' | 'clover';
+    const merchantId = req.query.merchantId as string;
+
+    if (!['square', 'clover'].includes(provider)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Provider must be either "square" or "clover"'
+      });
+    }
+
+    if (!merchantId) {
+      return res.status(400).json({
+        success: false,
+        error: 'merchantId query parameter is required'
+      });
+    }
+
+    const connection = oauthService.getConnection(merchantId, provider);
+
+    if (!connection) {
+      return res.json({
+        success: true,
+        data: {
+          connected: false,
+          status: 'not_connected'
+        }
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        connected: true,
+        connectionId: connection.id,
+        provider: connection.provider,
+        merchantAccountId: connection.merchantAccountId,
+        status: connection.status,
+        lastConnectedAt: connection.lastConnectedAt,
+        tokenExpiresAt: connection.tokenExpiresAt
+      }
+    });
+  } catch (error) {
+    console.error('Error checking OAuth status:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to check OAuth status'
     });
   }
 });

@@ -4,7 +4,7 @@
  * Based on SalesArc Wallet Architecture
  */
 
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import { db, Customer, Voucher, Redemption, Transaction } from '../models';
 import { rewardEngine } from './reward-engine';
 
@@ -20,7 +20,7 @@ export class WalletService {
     if (!customer) {
       // Create new customer
       customer = {
-        id: uuidv4(),
+        id: randomUUID(),
         phoneNumber,
         email: data?.email,
         firstName: data?.firstName,
@@ -132,7 +132,7 @@ export class WalletService {
     if (result.success && result.voucher) {
       // Record redemption
       const redemption: Redemption = {
-        id: uuidv4(),
+        id: randomUUID(),
         customerId,
         voucherId: result.voucher.id,
         transactionId,

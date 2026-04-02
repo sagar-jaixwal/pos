@@ -4,7 +4,7 @@
  * Based on SalesArc POS Adapter Architecture
  */
 
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import { db, Transaction, TransactionItem, RewardRule } from '../models';
 import { rewardEngine } from './reward-engine';
 import { walletService } from './wallet';
@@ -82,7 +82,7 @@ export class POSAdapterService {
     } else {
       // Anonymous transaction - no points awarded
       return {
-        transactionId: uuidv4(),
+        transactionId: randomUUID(),
         customerId: 'anonymous',
         pointsEarned: 0,
         pointsBalance: 0,
@@ -94,7 +94,7 @@ export class POSAdapterService {
 
     // Create transaction record
     const transaction: Transaction = {
-      id: uuidv4(),
+      id: randomUUID(),
       customerId,
       posSystemId,
       merchantId,
