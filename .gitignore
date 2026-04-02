@@ -7,6 +7,9 @@ dist/
 build/
 *.js.map
 *.tsbuildinfo
+deploy.sh
+docker-compose.yml
+Dockerfile
 
 # Environment
 .env
